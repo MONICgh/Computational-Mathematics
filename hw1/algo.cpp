@@ -7,14 +7,13 @@
 
 using namespace std;
 
-int N = 900;
-int NB = 50;
-int MAX_ITER = 100;
+int N = 100;
+int NB = N / 20;
 int THREAD_COUNT = 8;
 
 const int SEED = 1;
 const double H = (double)(1) / (double)(N + 1);
-const double EPS = 1e-3;
+const double EPS = 1e-1;
 
 // Алгоритм 11.1
 auto problem_finding_function(vector<vector<double>>& u, const vector<vector<double>>& f, int& iter) {
@@ -32,7 +31,6 @@ auto problem_finding_function(vector<vector<double>>& u, const vector<vector<dou
             }
         }
         iter++;
-        if (iter >= MAX_ITER) break;
     } while (dmax > EPS);
 
     auto end = chrono::high_resolution_clock::now();
@@ -105,7 +103,6 @@ auto problem_finding_function_parallel(vector<vector<double>>& u, const vector<v
             omp_unset_lock(&dmax_lock);
         }
         iter++;
-        if (iter >= MAX_ITER) break;
     } while ( dmax > EPS ); 
 
     auto end = chrono::high_resolution_clock::now();
@@ -117,40 +114,60 @@ void generate_start_values(vector<vector<double>>& u) {
     mt19937 gen(SEED);
     uniform_real_distribution<double> rand(0.0, 1.0);
     
-    double x, y;
-    for (int i = 0; i < N + 2; i++) {
-        for (int j = 0; j < N + 2; j++) {
-            x = (double)i / (double)(N + 1);
-            y = (double)j / (double)(N + 1);
-            if (y == 0) u[i][j] = 100 - 200 * x;
-            else if (x == 0) u[i][j] = 100 - 200 * y;
-            else if (y == 1) u[i][j] = -100 + 200 * x;
-            else if (x == 1) u[i][j] = -100 + 200 * y;
-            else u[i][j] = rand(gen);
-        }
+    for (int i = 1; i < N + 1; i++) {
+        for (int j = 1; j < N + 1; j++)
+            u[i][j] = rand(gen);
+    }
+
+    for (int i = 0; i <= N + 1; i++) {
+        double x = (double)i / (double)(N + 1);
+        u[i][0] = 100 - 200 * x;
+        u[i][N + 1] = 100 - 200 * x;
+    }
+
+    for (int j = 0; j <= N + 1; j++) {
+        double y = (double)j / (double)(N + 1);
+        u[0][j] = 100 - 200 * y;
+        u[N + 1][j] = -100 + 200 * y;
     }
 }
 
 void run () {
     vector<vector<double>> u(N + 2, vector<double> (N + 2)), f(N + 2, vector<double> (N + 2));
-    generate_start_values(u);
-    int k1 = 0;
-    auto t1 = problem_finding_function(u, f, k1);
+    
+    int count_tests = 10; double INF = 1e9;
 
-    cout << N << ' ' << NB << ' ' << THREAD_COUNT << '\n';
-    cout << k1 << ' ' << fixed << setprecision(3) << t1.count() << '\n';
+    int k1 = 0, k2 = 0;
 
-    generate_start_values(u);
-    int k2 = 0;
-    auto t2 = problem_finding_function_parallel(u, f, k2);
+    double min_time = INF, max_time = 0, sum_time = 0;
+    for (int i = 0; i < count_tests; i++) {
+        generate_start_values(u);
+        auto t1 = problem_finding_function(u, f, k1);
 
-    cout <<  k2 << ' ' << t2.count() << '\n' << '\n';
+        min_time = min(min_time, t1.count());
+        max_time = max(max_time, t1.count());
+        sum_time += t1.count();
+    }
+
+    cout << N << " | ";
+    cout << k1 << " | " << fixed << setprecision(3) << min_time << " | " << sum_time / count_tests << " | " << max_time;
+
+    min_time = INF, max_time = 0, sum_time = 0;
+    for (int i = 0; i < count_tests; i++) {
+        generate_start_values(u);
+        auto t2 = problem_finding_function_parallel(u, f, k2);
+
+        min_time = min(min_time, t2.count());
+        max_time = max(max_time, t2.count());
+        sum_time += t2.count();
+    }
+
+    cout << " | " << min_time << " | " << sum_time / count_tests << " | " << max_time;
     // time in seconds, k - iterations count
 }
 
 int main () {
 
-    // N = 900; NB = 50; MAX_ITER = 100; THREAD_COUNT = 8;
     run();
 
     return 0;
